@@ -8,6 +8,7 @@ from rdpy.core.crypto import SecuritySettings, RC4CrypterProxy
 from rdpy.enum.rdp import NegotiationProtocols, RDPDataPDUSubtype, InputEventType, RDPFastPathParserMode, \
     EncryptionMethod, EncryptionLevel
 from rdpy.layer.mcs import MCSLayer
+from rdpy.layer.cssp import CredSSPLayer
 from rdpy.layer.rdp.data import RDPDataLayer
 from rdpy.layer.rdp.licensing import RDPLicensingLayer
 from rdpy.layer.rdp.security import createNonTLSSecurityLayer, TLSSecurityLayer
@@ -128,18 +129,36 @@ class MITMServer(ClientFactory, MCSUserObserver, MCSChannelFactory):
         self.negotiationPDU = self.rdpNegotiationParser.parse(pdu.payload)
 
         # Only SSL is implemented, so remove other protocol flags
-        self.negotiationPDU.requestedProtocols &= NegotiationProtocols.SSL
+        self.negotiationPDU.requestedProtocols &= NegotiationProtocols.SSL | NegotiationProtocols.CRED_SSP
         self.connectClient()
 
     # X224 Response
-    def onConnectionConfirm(self, _):
-        protocols = NegotiationProtocols.SSL if self.negotiationPDU.tlsSupported else NegotiationProtocols.NONE
+    def onConnectionConfirm(self, response):
+        response = self.rdpNegotiationParser.parse(response.payload)
+        protocols = response.selectedProtocols
         payload = self.rdpNegotiationParser.write(RDPNegotiationResponsePDU(0x00, protocols))
         self.x224.sendConnectionConfirm(payload, source = 0x1234)
 
-        if self.negotiationPDU.tlsSupported:
+        if response.tlsSelected or response.credSSPSelected:
             self.tcp.startTLS(ServerTLSContext(privateKeyFileName=self.privateKeyFileName, certificateFileName=self.certificateFileName))
             self.useTLS = True
+
+        if response.credSSPSelected:
+            self.credSSPLayer = CredSSPLayer()
+            self.tcp.setNext(self.credSSPLayer)
+            self.credSSPLayer.createObserver(onPDUReceived = self.credSSPPDUReceived, onDataReceived = self.credSSPDataReceived)
+
+    def credSSPPDUReceived(self, pdu):
+        self.client.sendCredSSPPDU(pdu)
+
+    def credSSPDataReceived(self, data):
+        self.client.sendCredSSPData(data)
+
+    def sendCredSSPPDU(self, pdu):
+        self.credSSPLayer.sendPDU(pdu)
+
+    def sendCredSSPData(self, data):
+        self.credSSPLayer.sendData(data)
 
     # MCS Connect Initial
     def onConnectInitial(self, pdu):

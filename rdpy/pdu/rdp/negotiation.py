@@ -16,7 +16,7 @@ class RDPNegotiationResponsePDU(PDU):
         self.flags = flags
         self.selectedProtocols = selectedProtocols
         self.tlsSelected = self.selectedProtocols & NegotiationProtocols.SSL != 0
-        self.credSspSelected = self.selectedProtocols & NegotiationProtocols.CRED_SSP != 0
+        self.credSSPSelected = self.selectedProtocols & NegotiationProtocols.CRED_SSP != 0
         self.earlyUserAuthSelected = self.selectedProtocols & NegotiationProtocols.EARLY_USER_AUTHORIZATION_RESULT != 0
 
 
@@ -32,5 +32,5 @@ class RDPNegotiationRequestPDU(PDU):
         self.packetType = NegociationType.TYPE_RDP_NEG_REQ
         self.requestedProtocols = requestedProtocols
         self.tlsSupported = self.requestedProtocols & NegotiationProtocols.SSL != 0
-        self.credSspSupported = self.requestedProtocols & NegotiationProtocols.CRED_SSP != 0
+        self.credSSPSupported = self.requestedProtocols & NegotiationProtocols.CRED_SSP != 0
         self.earlyUserAuthSupported = self.requestedProtocols & NegotiationProtocols.EARLY_USER_AUTHORIZATION_RESULT != 0

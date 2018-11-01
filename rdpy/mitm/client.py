@@ -1,6 +1,7 @@
 from rdpy.core import log
 from rdpy.core.crypto import SecuritySettings
 from rdpy.enum.rdp import RDPFastPathParserMode
+from rdpy.layer.cssp import CredSSPLayer
 from rdpy.layer.gcc import GCCClientConnectionLayer
 from rdpy.layer.mcs import MCSLayer, MCSClientConnectionLayer
 from rdpy.layer.rdp.connection import RDPClientConnectionLayer
@@ -96,11 +97,28 @@ class MITMClient(MCSChannelFactory, MCSUserObserver):
         parser = RDPNegotiationParser()
         response = parser.parse(pdu.payload)
 
-        if response.tlsSelected:
+        if response.tlsSelected or response.credSSPSelected:
             self.tcp.startTLS(ClientTLSContext())
             self.useTLS = True
 
+        if response.credSSPSelected:
+            self.credSSPLayer = CredSSPLayer()
+            self.tcp.setNext(self.credSSPLayer)
+            self.credSSPLayer.createObserver(onPDUReceived=self.credSSPPDUReceived, onDataReceived=self.credSSPDataReceived)
+
         self.server.onConnectionConfirm(pdu)
+
+    def credSSPPDUReceived(self, pdu):
+        self.server.sendCredSSPPDU(pdu)
+
+    def credSSPDataReceived(self, data):
+        self.server.sendCredSSPData(data)
+
+    def sendCredSSPPDU(self, pdu):
+        self.credSSPLayer.sendPDU(pdu)
+
+    def sendCredSSPData(self, data):
+        self.credSSPLayer.sendData(data)
 
     def onConnectInitial(self, gccConferenceCreateRequest, clientData):
         """

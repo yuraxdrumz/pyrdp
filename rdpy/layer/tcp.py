@@ -59,6 +59,10 @@ class TCPLayer(Protocol, Layer):
         :param data: The data to send
         :type data: str
         """
+        if self.logSSLRequired:
+            self.logSSLParameters()
+            self.logSSLRequired = False
+
         self.transport.write(data)
 
     def startTLS(self, tlsContext):
