@@ -1,5 +1,6 @@
 from StringIO import StringIO
 from rdpy.core import der
+from rdpy.enum.cssp import TSRequestField
 from rdpy.pdu.rdp.cssp import TSRequestPDU
 
 
@@ -46,17 +47,17 @@ class CredSSPParser:
 
         while len(tsRequestParser) > 0:
             construct = tsRequestParser.readConstruct()
-            if construct.index == 0:
+            if construct.index == TSRequestField.VERSION:
                 version = construct.readInteger()
-            elif construct.index == 1:
+            elif construct.index == TSRequestField.NEGO_DATA:
                 tokens = self.parseNegoData(construct)
-            elif construct.index == 2:
+            elif construct.index == TSRequestField.AUTH_INFO:
                 authInfo = construct.readOctetStream()
-            elif construct.index == 3:
+            elif construct.index == TSRequestField.PUB_KEY_AUTH:
                 pubKeyAuth = construct.readOctetStream()
-            elif construct.index == 4:
+            elif construct.index == TSRequestField.ERROR_CODE:
                 errorCode = construct.readInteger()
-            elif construct.index == 5:
+            elif construct.index == TSRequestField.CLIENT_NONCE:
                 clientNonce = construct.readOctetStream()
 
         return TSRequestPDU(version, tokens, authInfo, pubKeyAuth, errorCode, clientNonce)
@@ -72,21 +73,21 @@ class CredSSPParser:
         tsRequestSequence = root.writeSequence()
 
         if pdu.version:
-            tsRequestSequence.writeConstruct(0).writeInteger(pdu.version)
+            tsRequestSequence.writeConstruct(TSRequestField.VERSION).writeInteger(pdu.version)
 
         if pdu.negoTokens:
-            self.writeNegoData(tsRequestSequence.writeConstruct(1), pdu.negoTokens)
+            self.writeNegoData(tsRequestSequence.writeConstruct(TSRequestField.NEGO_DATA), pdu.negoTokens)
 
         if pdu.authInfo:
-            tsRequestSequence.writeConstruct(2).writeOctetStream(pdu.authInfo)
+            tsRequestSequence.writeConstruct(TSRequestField.AUTH_INFO).writeOctetStream(pdu.authInfo)
 
         if pdu.pubKeyAuth:
-            tsRequestSequence.writeConstruct(3).writeOctetStream(pdu.pubKeyAuth)
+            tsRequestSequence.writeConstruct(TSRequestField.PUB_KEY_AUTH).writeOctetStream(pdu.pubKeyAuth)
 
         if pdu.errorCode:
-            tsRequestSequence.writeConstruct(4).writeInteger(pdu.errorCode)
+            tsRequestSequence.writeConstruct(TSRequestField.ERROR_CODE).writeInteger(pdu.errorCode)
 
         if pdu.clientNonce:
-            tsRequestSequence.writeConstruct(5).writeOctetStream(pdu.clientNonce)
+            tsRequestSequence.writeConstruct(TSRequestField.CLIENT_NONCE).writeOctetStream(pdu.clientNonce)
 
         return root.getData()
