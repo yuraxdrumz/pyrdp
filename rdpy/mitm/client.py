@@ -14,6 +14,7 @@ from rdpy.layer.x224 import X224Layer
 from rdpy.mcs.channel import MCSChannelFactory, MCSClientChannel
 from rdpy.mcs.client import MCSClientRouter
 from rdpy.mcs.user import MCSUserObserver
+from rdpy.mitm.cssp import CredSSPMITMObserver
 from rdpy.mitm.observer import MITMSlowPathObserver, MITMFastPathObserver
 from rdpy.parser.rdp.negotiation import RDPNegotiationParser
 from rdpy.protocol.rdp.x224 import ClientTLSContext
@@ -30,6 +31,7 @@ class MITMClient(MCSChannelFactory, MCSUserObserver):
         self.mcs = MCSLayer()
         self.router = MCSClientRouter(self.mcs, self)
         self.io = RDPDataLayer()
+        self.credSSPLayer = CredSSPLayer()
         self.channelMap = {}
         self.channelDefinitions = []
         self.channelObservers = {}
@@ -57,6 +59,7 @@ class MITMClient(MCSChannelFactory, MCSUserObserver):
         self.mcs.setObserver(self.router)
 
         self.tcp.createObserver(onConnection=self.startConnection, onDisconnection=self.onDisconnection)
+        self.credSSPLayer.setObserver(CredSSPMITMObserver(self.server))
         self.x224.createObserver(onConnectionConfirm=self.onConnectionConfirm)
         self.router.createObserver(onConnectResponse=self.onConnectResponse, onDisconnectProviderUltimatum=self.onDisconnectProviderUltimatum)
         self.gccConnect.createObserver(onPDUReceived=self.onConferenceCreateResponse)
@@ -102,17 +105,9 @@ class MITMClient(MCSChannelFactory, MCSUserObserver):
             self.useTLS = True
 
         if response.credSSPSelected:
-            self.credSSPLayer = CredSSPLayer()
             self.tcp.setNext(self.credSSPLayer)
-            self.credSSPLayer.createObserver(onPDUReceived=self.credSSPPDUReceived, onDataReceived=self.credSSPDataReceived)
 
         self.server.onConnectionConfirm(pdu)
-
-    def credSSPPDUReceived(self, pdu):
-        self.server.sendCredSSPPDU(pdu)
-
-    def credSSPDataReceived(self, data):
-        self.server.sendCredSSPData(data)
 
     def sendCredSSPPDU(self, pdu):
         self.credSSPLayer.sendPDU(pdu)

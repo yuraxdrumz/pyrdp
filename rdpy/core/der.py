@@ -57,7 +57,7 @@ def readConstruct(stream):
     if not isConstruct(tag):
         raise ParsingError("Construct expected, got primitive")
 
-    return stream.read(length)
+    return (tag & ~0xa0), stream.read(length)
 
 def readInteger(stream):
     tag, length = readHeader(stream)
@@ -136,8 +136,9 @@ class DERParser:
         Read a construct and create a new DERParser from the construct data.
         :return: DERParser
         """
-        stream = StringIO(readConstruct(self.stream))
-        return DERParser(stream)
+        index, data = readConstruct(self.stream)
+        stream = StringIO(data)
+        return DERConstructParser(index, stream)
 
     def readInteger(self):
         """
@@ -156,6 +157,20 @@ class DERParser:
     def __len__(self):
         return self.stream.len - self.stream.pos
 
+class DERConstructParser(DERParser):
+    def __init__(self, index, stream):
+        """
+        Create a new DERConstructParser.
+        :param index: construct index.
+        :type index: int
+        :param stream: stream containing DER-encoded data.
+        :type stream: StringIO
+        """
+        DERParser.__init__(self, stream)
+        self.index = index
+
+
+
 class DERWriter:
     def __init__(self, tag = None):
         """
@@ -163,7 +178,6 @@ class DERWriter:
         """
         self.tag = tag
         self.objects = []
-        self.constructCount = 0
 
     def getData(self):
         """
@@ -189,13 +203,12 @@ class DERWriter:
         self.objects.append(sequence)
         return sequence
 
-    def writeConstruct(self):
+    def writeConstruct(self, index):
         """
         Create a new construct object.
         :return: DERWriter
         """
-        construct = DERWriter(0xa0 | self.constructCount)
-        self.constructCount += 1
+        construct = DERWriter(0xa0 | index)
         self.objects.append(construct)
         return construct
 

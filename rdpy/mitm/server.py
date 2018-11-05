@@ -7,8 +7,8 @@ from rdpy.core import log
 from rdpy.core.crypto import SecuritySettings, RC4CrypterProxy
 from rdpy.enum.rdp import NegotiationProtocols, RDPDataPDUSubtype, InputEventType, RDPFastPathParserMode, \
     EncryptionMethod, EncryptionLevel
-from rdpy.layer.mcs import MCSLayer
 from rdpy.layer.cssp import CredSSPLayer
+from rdpy.layer.mcs import MCSLayer
 from rdpy.layer.rdp.data import RDPDataLayer
 from rdpy.layer.rdp.licensing import RDPLicensingLayer
 from rdpy.layer.rdp.security import createNonTLSSecurityLayer, TLSSecurityLayer
@@ -19,6 +19,7 @@ from rdpy.mcs.channel import MCSChannelFactory, MCSServerChannel
 from rdpy.mcs.server import MCSServerRouter
 from rdpy.mcs.user import MCSUserObserver
 from rdpy.mitm.client import MITMClient
+from rdpy.mitm.cssp import CredSSPMITMObserver
 from rdpy.mitm.observer import MITMSlowPathObserver, MITMFastPathObserver
 from rdpy.parser.gcc import GCCParser
 from rdpy.parser.rdp.client_info import RDPClientInfoParser
@@ -40,6 +41,7 @@ class MITMServer(ClientFactory, MCSUserObserver, MCSChannelFactory):
         self.client = None
         self.negotiationPDU = None
         self.serverData = None
+        self.credSSPLayer = CredSSPLayer()
         self.io = RDPDataLayer()
         self.securityLayer = None
         self.fastPathParser = None
@@ -144,15 +146,8 @@ class MITMServer(ClientFactory, MCSUserObserver, MCSChannelFactory):
             self.useTLS = True
 
         if response.credSSPSelected:
-            self.credSSPLayer = CredSSPLayer()
+            self.credSSPLayer.setObserver(CredSSPMITMObserver(self.client))
             self.tcp.setNext(self.credSSPLayer)
-            self.credSSPLayer.createObserver(onPDUReceived = self.credSSPPDUReceived, onDataReceived = self.credSSPDataReceived)
-
-    def credSSPPDUReceived(self, pdu):
-        self.client.sendCredSSPPDU(pdu)
-
-    def credSSPDataReceived(self, data):
-        self.client.sendCredSSPData(data)
 
     def sendCredSSPPDU(self, pdu):
         self.credSSPLayer.sendPDU(pdu)

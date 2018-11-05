@@ -4,12 +4,12 @@ from rdpy.pdu.rdp.cssp import TSRequestPDU
 
 
 class CredSSPParser:
-    def parseNegoData(self, parser):
+    def parseNegoData(self, construct):
         """
-        :type parser: der.DERParser
+        :type construct: der.DERParser
         :return: list
         """
-        sequence = parser.readSequence()
+        sequence = construct.readSequence()
         tokens = []
 
         while len(sequence) > 0:
@@ -28,13 +28,6 @@ class CredSSPParser:
         for token in tokens:
             sequence.writeSequence().writeConstruct().writeOctetStream(token)
 
-    def parseAuthInfo(self, parser):
-        """
-        :type parser: der.DERParser
-        :return: TSCredentials
-        """
-        pass
-
     def parseTSRequest(self, stream):
         """
         Parse a TSRequest from a stream of DER-encoded data.
@@ -44,27 +37,28 @@ class CredSSPParser:
         """
         root = der.DERParser(stream)
         tsRequestParser = root.readSequence()
-        version = tsRequestParser.readConstruct().readInteger()
-        tokens = self.parseNegoData(tsRequestParser.readConstruct())
-
+        version = None
+        tokens = None
         authInfo = None
         pubKeyAuth = None
         errorCode = None
         clientNonce = None
 
-        if len(tsRequestParser) > 0:
-            authInfo = tsRequestParser.readConstruct().readOctetStream()
+        while len(tsRequestParser) > 0:
+            construct = tsRequestParser.readConstruct()
+            if construct.index == 0:
+                version = construct.readInteger()
+            elif construct.index == 1:
+                tokens = self.parseNegoData(construct)
+            elif construct.index == 2:
+                authInfo = construct.readOctetStream()
+            elif construct.index == 3:
+                pubKeyAuth = construct.readOctetStream()
+            elif construct.index == 4:
+                errorCode = construct.readInteger()
+            elif construct.index == 5:
+                clientNonce = construct.readOctetStream()
 
-        if len(tsRequestParser) > 0:
-            pubKeyAuth = tsRequestParser.readConstruct().readOctetStream()
-
-        if len(tsRequestParser) > 0:
-            errorCode = tsRequestParser.readConstruct().readInteger()
-
-        if len(tsRequestParser) > 0:
-            clientNonce = tsRequestParser.readConstruct().readOctetStream()
-
-            authInfo = tsRequestParser.readConstruct().readOctetStream()
         return TSRequestPDU(version, tokens, authInfo, pubKeyAuth, errorCode, clientNonce)
 
     def writeTSRequest(self, pdu):
@@ -76,6 +70,23 @@ class CredSSPParser:
         """
         root = der.DERWriter()
         tsRequestSequence = root.writeSequence()
-        tsRequestSequence.writeConstruct().writeInteger(pdu.version)
-        self.writeNegoData(tsRequestSequence.writeConstruct(), pdu.negoTokens)
+
+        if pdu.version:
+            tsRequestSequence.writeConstruct(0).writeInteger(pdu.version)
+
+        if pdu.negoTokens:
+            self.writeNegoData(tsRequestSequence.writeConstruct(1), pdu.negoTokens)
+
+        if pdu.authInfo:
+            tsRequestSequence.writeConstruct(2).writeOctetStream(pdu.authInfo)
+
+        if pdu.pubKeyAuth:
+            tsRequestSequence.writeConstruct(3).writeOctetStream(pdu.pubKeyAuth)
+
+        if pdu.errorCode:
+            tsRequestSequence.writeConstruct(4).writeInteger(pdu.errorCode)
+
+        if pdu.clientNonce:
+            tsRequestSequence.writeConstruct(5).writeOctetStream(pdu.clientNonce)
+
         return root.getData()
